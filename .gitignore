@@ -21,6 +21,11 @@ env/
 # Logs and runtime files
 *.log
 *.pid
+*.bak
+
+# Playwright/Chromium runtime data
+harkins_browser_profile/
+harkins_debug/
 
 # Camera output
 *.jpg
