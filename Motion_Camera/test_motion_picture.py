@@ -22,7 +22,7 @@ try:
       if pir.motion_detected: # type: ignore
          print("Motion Detected")
          count += 1
-         picam.capture_file(f"Raspberry-4-Projects/GPIO/images/image_{count}.jpg")
+         picam.capture_file(f"/home/p-c/Documents/RaspPi_Projects/Motion_Camera/images/image_{count}.jpg")
       else:
          print("No Motion Detected")
       time.sleep(0.5)  # Sleep for a short time to avoid excessive CPU usage
