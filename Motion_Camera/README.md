@@ -1,3 +1,34 @@
+## HC-SR501 motion-triggered recording
+
+`main.py` monitors the existing HC-SR501 on **BCM GPIO 17 (physical header pin 11)**. It waits 30 seconds for sensor warm-up, then each motion event starts a **five-second recording from both detected USB webcams concurrently**. Camera settings are detected automatically using the same helpers as the streaming script; no resolution or frame-rate flags are needed.
+
+On the Pi, after pulling the code:
+
+```sh
+sudo apt install ffmpeg v4l-utils python3-gpiozero python3-lgpio
+~/usb-photos.sh -connect
+cd ~/Documents/RaspPi_Projects/Motion_Camera
+python3 main.py
+```
+
+Use the system Python or a virtual environment created with `--system-site-packages` so it can import the Pi's gpiozero/lgpio packages. Run as a user with GPIO and video access (the configured `p-c` user belongs to those groups). The program does not change the existing sensor wiring.
+
+Clips are saved to **`Personal/Surveillance`**, currently `/srv/pi-photos-primary/Surveillance` on PhotoDrive. It is separate from `Photos` and `Videos`. Each event creates two UTC-timestamped `.mkv` files ending in `_camera-1.mkv` and `_camera-2.mkv`; both share the same event identifier. Matroska preserves the cameras' native MJPEG/H.264/HEVC video without additional lossy encoding and plays in VLC. No audio is recorded. Camera opening adds startup latency; each clip contains five seconds of video after its camera starts.
+
+The PIR must return LOW before another event is armed. Motion during a recording does not create overlapping clips or extend the five-second duration. If one camera fails, a successful clip from the other is retained and an error identifies the missing recording. Reconnected cameras are detected again on the next event. With only one camera available, the program logs a warning and records that camera.
+
+The USB must be mounted; recording never deliberately falls back to the SD card. New recordings are refused below 512 MiB free, and no existing clips are automatically deleted. Failed/interrupted clips remain as hidden `.partial.mkv` files for inspection; they are not presented as complete five-second recordings. A stuck camera is terminated after the five-second clip budget plus 20 seconds of startup allowance. Ctrl+C or SIGTERM stops the recorder, terminates active FFmpeg processes and releases GPIO.
+
+Stop `stream_picam.py` before running `main.py`; these independent programs open the webcams directly and cannot share an active camera capture. Pi Photos can keep running. Stop the motion recorder before disconnecting the USB. Scheduled photo backups currently cover the photo library, not `Surveillance`.
+
+Local validation uses mocked GPIO/processes and temporary files, without activating the real sensor or recording real cameras:
+
+```sh
+python3 -m unittest -v test_motion_recording test_stream_modes
+```
+
+The 17 checks cover concurrent camera launch, five-second FFmpeg output settings, per-camera failures, shutdown/timeouts, PIR HIGH/LOW rearming, storage guards and the existing streaming behavior. A real motion-triggered two-camera recording remains to be checked after deployment to the Pi.
+
 ## Automatic USB webcam streaming
 
 Run `python3 stream_picam.py` without options. Install `ffmpeg` and `v4l-utils` first. The script discovers up to **two USB webcams**, queries each camera's advertised modes, and starts independent streams on **ports 5000 and 5001**. It prefers the highest-resolution native compressed mode supporting at least 30 fps, using the highest available frame rate at that resolution. A slower camera uses its fastest advertised compressed mode. Raw-only webcams use software H.264 encoding at a modest resolution to limit Pi CPU use.

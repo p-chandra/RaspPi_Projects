@@ -159,11 +159,8 @@ def stream_webcam(device, mode, port, stop_event, listener):
         stop_encoder(process)
 
 
-def main():
-    for executable, package in [('ffmpeg', 'ffmpeg'), ('v4l2-ctl', 'v4l-utils')]:
-        if not shutil.which(executable):
-            print(f'{executable} is required. Install it with: sudo apt install {package}')
-            return
+def discover_cameras():
+    """Probe up to two USB cameras, shared by streaming and motion recording."""
     cameras = []
     for device in detect_webcams():
         try:
@@ -176,6 +173,15 @@ def main():
         cameras.append((device, mode))
         if len(cameras) == 2:
             break
+    return cameras
+
+
+def main():
+    for executable, package in [('ffmpeg', 'ffmpeg'), ('v4l2-ctl', 'v4l-utils')]:
+        if not shutil.which(executable):
+            print(f'{executable} is required. Install it with: sudo apt install {package}')
+            return
+    cameras = discover_cameras()
     if not cameras:
         print('No supported USB webcam available; stream was not started.')
         return
