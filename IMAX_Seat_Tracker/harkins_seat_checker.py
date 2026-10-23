@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -282,6 +283,14 @@ def alert_user(day: date, showtime: str, seats: list[str]) -> None:
             pass
 
 
+def save_debug_safely(page: Page, available: Iterable[str], prefix: str) -> None:
+    """Diagnostics must never change a seat scan's result."""
+    try:
+        save_debug(page, available, prefix=prefix)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Could not save %s debug artifacts: %s", prefix, exc)
+
+
 def close_context_safely(context: BrowserContext | object) -> None:
     try:
         context.close()
@@ -329,10 +338,7 @@ def scan_availability(start_day: date, end_day: date) -> list[dict[str, object]]
                 try:
                     showtimes = discover_imax_showtimes(page, current_day)
                 except Exception as exc:
-                    try:
-                        save_debug(page, [], prefix="discovery_error")
-                    except Exception:
-                        pass
+                    save_debug_safely(page, [], prefix="discovery_error")
                     results.append(
                         {
                             "date": current_day.isoformat(),
@@ -366,22 +372,8 @@ def scan_availability(start_day: date, end_day: date) -> list[dict[str, object]]
                             )
                             if seat is not None
                         ]
-                        results.append(
-                            {
-                                "date": current_day.isoformat(),
-                                "showtime": showtime,
-                                "seats": seats,
-                            }
-                        )
-
-                        if available:
-                            save_debug(page, available, prefix="match")
-                            alert_user(current_day, showtime, seats)
                     except Exception as exc:
-                        try:
-                            save_debug(page, [], prefix="showtime_error")
-                        except Exception:
-                            pass
+                        save_debug_safely(page, [], prefix="showtime_error")
                         results.append(
                             {
                                 "date": current_day.isoformat(),
@@ -390,6 +382,17 @@ def scan_availability(start_day: date, end_day: date) -> list[dict[str, object]]
                                 "error": f"Could not inspect seats: {exc}",
                             }
                         )
+                        continue
+
+                    results.append(
+                        {"date": current_day.isoformat(), "showtime": showtime, "seats": seats}
+                    )
+                    if available:
+                        save_debug_safely(page, available, prefix="match")
+                        try:
+                            alert_user(current_day, showtime, seats)
+                        except Exception as exc:
+                            logging.getLogger(__name__).warning("Could not send seat alert: %s", exc)
 
                 current_day += timedelta(days=1)
         finally:

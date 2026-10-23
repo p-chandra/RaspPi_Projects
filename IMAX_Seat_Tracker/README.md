@@ -1,9 +1,10 @@
 # Raspberry Pi IMAX Seat Tracker API
 
-This project runs the server side of the IMAX Tracker Android application. The
-phone submits a scan job through Tailscale, the Raspberry Pi runs Playwright
-with headless Chromium, and the phone retrieves the results later. A scan keeps
-running when the phone locks or disconnects.
+This is the single maintained IMAX backend for both the Android app and terminal use.
+It runs Playwright with Chromium to inspect Harkins seating pages. The current
+Android app uses synchronous `POST /scan` over Tailscale. Background clients can
+submit `POST /scan-jobs` and retrieve results later; accepted background jobs keep
+running after the submitting phone locks or disconnects.
 
 The project reports availability only. It does not reserve seats, add tickets
 to a cart, or make purchases.
@@ -16,12 +17,23 @@ Android app
     -> Raspberry Pi API on port 8000
     -> Playwright with headless Chromium
     -> Harkins seating pages
-    -> saved in-memory job result
-    -> Android completion notification
+    -> synchronous results or saved in-memory job result
+    -> Android results screen / background-job polling client
 ```
 
-The separate `IMAX_Seat_Tracker` repository remains the desktop-terminal
-version of the scanner. This directory owns the Raspberry Pi API deployment.
+The former standalone `IMAX_Seat_Tracker` repo has been retired into the local
+workspace archive, preserving its Git history, browser profile and debug files.
+Use this directory for all backend changes. Its scanner also runs directly:
+
+```bash
+.venv/bin/python harkins_seat_checker.py
+```
+
+Stop the API before running a terminal scan, since both use the same browser
+profile. Desktop mode uses a browser window when a display is available.
+
+WSL source: `/home/pawan/workspace/RaspPi_Projects/IMAX_Seat_Tracker`.
+Android client: `/home/pawan/workspace/Android_Apps/IMAXTracker`.
 
 ## Files
 
@@ -95,10 +107,11 @@ cd /home/p-c/Documents/RaspPi_Projects/IMAX_Seat_Tracker
 .venv/bin/python api_server.py
 ```
 
-Verify it in another terminal:
+The API binds only to the Tailscale address `100.117.156.54` on port 8000.
+Connect Tailscale before startup. Verify it in another terminal:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://100.117.156.54:8000/health
 ```
 
 Expected response:
@@ -106,6 +119,12 @@ Expected response:
 ```json
 {"status": "ok"}
 ```
+
+For local development without the Pi's address, run
+`IMAX_API_HOST=127.0.0.1 python api_server.py`. If the Pi's Tailscale IP changes,
+update `IMAX_API_HOST` in the unit and the phone's server address. The included
+unit starts Tailscale as a dependency and retries startup if its address is not
+available yet. Loopback and home-network addresses are not served by default.
 
 ## Start automatically with systemd
 
@@ -194,16 +213,29 @@ response contains a `results` array:
 
 ### Legacy synchronous scan
 
-`POST /scan` remains available for diagnostics, but clients should use the job
-endpoints so a dropped phone connection does not lose the response.
+`POST /scan` remains compatible with the installed Android app. It returns
+`{"results": [...]}` on completion. A request received during another active scan
+returns HTTP 409 with a clear busy message; it cannot overwrite the active scan's
+filters. Clients using the job endpoints can instead queue scans and retrieve
+results after a dropped connection.
 
 ## Job behavior
 
-- A single worker processes scans sequentially.
+- A single worker processes background jobs sequentially.
+- Background and synchronous requests share one execution lock and browser profile.
+- Background jobs stay queued while a synchronous scan is active.
+- Health checks and job-status polling remain responsive during either scan type.
+- Scan filters are restored after completion or failure.
 - Job state and results are currently held in memory.
 - Restarting the API service clears queued, running, and completed jobs.
-- The Android client treats a missing job after restart as a failed scan.
+- Job clients must handle HTTP 404 after a service restart by submitting a new job.
 - The maximum accepted date range is 14 days.
+
+Request bodies are limited to 16 KiB. Malformed JSON, duplicate or invalid
+Content-Length headers, unsupported transfer encoding and incomplete bodies
+return HTTP 400. Reads time out after 15 seconds with HTTP 408; scans themselves
+are not subject to this request-read timeout. Diagnostic and notification
+failures are logged without duplicating or invalidating successful seat results.
 
 ## Tests
 
@@ -211,6 +243,11 @@ endpoints so a dropped phone connection does not lose the response.
 cd /home/p-c/Documents/RaspPi_Projects/IMAX_Seat_Tracker
 .venv/bin/python -m unittest discover -s tests -v
 ```
+
+The suite covers both API styles, queued jobs, concurrent health checks, filter
+isolation, client disconnects, failed-job recovery, malformed/partial HTTP bodies,
+relative ticketing URLs and diagnostic failures. Browser interactions are mocked;
+these tests do not contact Harkins. A live scan is a separate integration check.
 
 ## Troubleshooting
 
@@ -242,7 +279,8 @@ profile is stored in `harkins_browser_profile/`.
 ## Security
 
 - Keep port 8000 private; do not configure router port forwarding.
-- Restrict access through Tailscale grants or ACLs.
+- The service binds to its Tailscale IP rather than every network interface.
+- Restrict access through Tailscale grants or ACLs; there is no app-level login.
 - The API uses HTTP inside the encrypted Tailscale tunnel.
 - Do not commit credentials, Tailscale authentication keys, browser profiles,
   logs, debug captures, or virtual environments.

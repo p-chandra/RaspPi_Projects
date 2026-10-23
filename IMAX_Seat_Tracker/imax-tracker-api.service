@@ -1,12 +1,14 @@
 [Unit]
 Description=IMAX Tracker seat-scanning API
 After=network-online.target tailscaled.service
-Wants=network-online.target
+Wants=network-online.target tailscaled.service
 
 [Service]
 Type=simple
 User=p-c
 WorkingDirectory=/home/p-c/Documents/RaspPi_Projects/IMAX_Seat_Tracker
+Environment=IMAX_API_HOST=100.117.156.54
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/p-c/Documents/RaspPi_Projects/IMAX_Seat_Tracker/.venv/bin/python api_server.py
 Restart=on-failure
 RestartSec=5
