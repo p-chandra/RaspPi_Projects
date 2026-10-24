@@ -47,7 +47,7 @@ The service starts at boot when its primary USB mount is available. Logs: `journ
 
 ## Backups and recovery
 
-The backup timer runs once a week, on Sundays at 03:00 in the Pi's configured local timezone. If the Pi was off at that time, systemd runs the missed backup after startup. It requires both USB mounts. It snapshots SQLite through its backup API, copies immutable originals/thumbnails with rsync, then publishes the catalog. It never deletes destination files. A completed backup is stored under `/srv/pi-photos-backup/Photos/PiPhotosBackup/` with `last-backup.txt`. Photos uploaded since the last successful weekly run are not yet backed up. The backup is kept in its own subfolder to preserve any existing files elsewhere on the second drive.
+The backup timer runs once a week, on Sundays at 03:00 in the Pi's configured local timezone. It requires both USB mounts. Photos, Videos and Surveillance are copied into matching folders at the backup drive root, retaining file modification times. The SQLite snapshot, thumbnails and last-backup.txt are stored in the root .pi-photos folder. Destination-only files are retained; same-path files are updated from the primary. System-generated folders are not copied. Older Photos/PiPhotosBackup copies are left untouched; remove them only after verifying the new backup.
 
 Run or inspect a backup:
 
@@ -57,7 +57,7 @@ sudo systemctl status pi-photos-backup.timer
 journalctl -u pi-photos-backup -n 30
 ```
 
-For recovery, stop the server, restore the backup folder's photo files into an empty `Photos` folder on a mounted replacement primary drive, and restore its `.pi-photos` folder alongside `Photos` at the configured `PHOTO_META` location. Ensure `p-c` can write both, update the primary mount UUID if needed, and start the server. Keep the existing primary and backup until recovery is verified. The `.env` configuration is stored separately in `/home/p-c/pi-photos`; copy it to a safe location separately if desired.
+For recovery, stop the server, restore the backup drive's `Photos`, `Videos` and `Surveillance` folders to a mounted replacement primary drive, and restore the backup drive's root `.pi-photos` folder alongside `Photos` at the configured `PHOTO_META` location. Ensure `p-c` can write both, update the primary mount UUID if needed, and start the server. Keep the existing primary and backup until recovery is verified. The `.env` configuration is stored separately in `/home/p-c/pi-photos`; copy it to a safe location separately if desired.
 
 ## Photos already on a drive
 

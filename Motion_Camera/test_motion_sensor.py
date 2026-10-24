@@ -1,20 +1,16 @@
 from gpiozero import MotionSensor
-from signal import pause
+from time import sleep
 
-# Set up the motion sensor on GPIO 17 pin 11
+# Set up motion sensor on GPIO17 (physical pin 11)
 pir = MotionSensor(17)
 
-def motion_function():
-	print("Motion Detected")
+while True:
+    if pir.motion_detected:
+        print("Motion Detected")
+    else:
+        print("No Motion Detected")
 
-def no_motion_function():
-	print("No Motion Detected")
-
-pir.when_motion = motion_function
-pir.when_no_motion = no_motion_function
-
-pause()
-
+    sleep(1)
 # 1. MotionSensor(17) created
 #    └─ Spawns background thread monitoring GPIO pin 17
 

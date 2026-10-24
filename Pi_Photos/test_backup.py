@@ -28,19 +28,31 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(result.status_code, 201)
             # Exercise the new sibling-metadata layout.
             (source / ".pi-photos").rename(Path(primary) / ".pi-photos")
+            for folder in ("Videos", "Surveillance"):
+                media = Path(primary) / folder
+                media.mkdir()
+                (media / "clip.mkv").write_bytes(b"video")
+                os.utime(media / "clip.mkv", (1600000000, 1600000000))
+            os.utime(source / "Test.jpg", (1600000000, 1600000000))
             env = {"PHOTO_MOUNT": primary, "PHOTO_DATA": str(source), "PHOTO_BACKUP_MOUNT": secondary}
             with patch.dict(os.environ, env), patch("backup.Path.is_mount", return_value=True):
                 backup()
                 # An existing backup-only file must also survive subsequent backups.
-                extra = destination / "PiPhotosBackup" / "keep.txt"
+                extra = destination / "keep.txt"
                 extra.write_text("preserve")
                 backup()
-            target = destination / "PiPhotosBackup"
+            target = destination
             self.assertEqual((target / "Test.jpg").read_bytes(), image.getvalue())
+            self.assertEqual((target / "Test.jpg").stat().st_mtime, 1600000000)
+            for folder in ("Videos", "Surveillance"):
+                clip = Path(secondary) / folder / "clip.mkv"
+                self.assertEqual(clip.read_bytes(), b"video")
+                self.assertEqual(clip.stat().st_mtime, 1600000000)
+            self.assertFalse((target / "PiPhotosBackup").exists())
             self.assertEqual(untouched.read_text(), "keep this file")
             self.assertEqual(extra.read_text(), "preserve")
-            self.assertTrue((target / "last-backup.txt").is_file())
-            with closing(sqlite3.connect(target / ".pi-photos" / "photos.sqlite3")) as catalog:
+            self.assertTrue((Path(secondary) / ".pi-photos" / "last-backup.txt").is_file())
+            with closing(sqlite3.connect(Path(secondary) / ".pi-photos" / "photos.sqlite3")) as catalog:
                 self.assertEqual(catalog.execute("SELECT path FROM photos").fetchone()[0], "Test.jpg")
 
     def test_missing_mount_refuses_backup(self):

@@ -13,7 +13,7 @@ python3 main.py
 
 Use the system Python or a virtual environment created with `--system-site-packages` so it can import the Pi's gpiozero/lgpio packages. Run as a user with GPIO and video access (the configured `p-c` user belongs to those groups). The program does not change the existing sensor wiring.
 
-Clips are saved to **`Personal/Surveillance`**, currently `/srv/pi-photos-primary/Surveillance` on PhotoDrive. It is separate from `Photos` and `Videos`. Each event creates two UTC-timestamped `.mkv` files ending in `_camera-1.mkv` and `_camera-2.mkv`; both share the same event identifier. Matroska preserves the cameras' native MJPEG/H.264/HEVC video without additional lossy encoding and plays in VLC. No audio is recorded. Camera opening adds startup latency; each clip contains five seconds of video after its camera starts.
+Clips are saved to **`PhotoDrive/Surveillance`**, currently `/srv/pi-photos-primary/Surveillance`. It is separate from `Photos` and `Videos`. Each event creates two UTC-timestamped `.mkv` files ending in `_camera-1.mkv` and `_camera-2.mkv`; both share the same event identifier. Matroska preserves the cameras' native MJPEG/H.264/HEVC video without additional lossy encoding and plays in VLC. No audio is recorded. Camera opening adds startup latency; each clip contains five seconds of video after its camera starts.
 
 The PIR must return LOW before another event is armed. Motion during a recording does not create overlapping clips or extend the five-second duration. If one camera fails, a successful clip from the other is retained and an error identifies the missing recording. Reconnected cameras are detected again on the next event. With only one camera available, the program logs a warning and records that camera.
 
